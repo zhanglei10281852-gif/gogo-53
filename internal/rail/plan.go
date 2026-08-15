@@ -291,7 +291,15 @@ func ApplySimulation(plan Plan, current ReleaseState, environmentName string, no
 		}
 		environment := state.Environments[environmentName]
 		component := environment.Components[componentPlan.Name]
+		recorded := make(map[string]bool, len(component.Migrations))
+		for _, id := range component.Migrations {
+			recorded[id] = true
+		}
 		for _, migration := range componentPlan.Migrations {
+			if recorded[migration.ID] {
+				continue
+			}
+			recorded[migration.ID] = true
 			component.Migrations = append(component.Migrations, migration.ID)
 		}
 		for waveIndex, wave := range componentPlan.Waves {
