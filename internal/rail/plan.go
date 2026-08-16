@@ -291,9 +291,7 @@ func ApplySimulation(plan Plan, current ReleaseState, environmentName string, no
 		}
 		environment := state.Environments[environmentName]
 		component := environment.Components[componentPlan.Name]
-		for _, migration := range componentPlan.Migrations {
-			component.Migrations = append(component.Migrations, migration.ID)
-		}
+		component.Migrations = recordMigrations(component.Migrations, componentPlan.Migrations)
 		for waveIndex, wave := range componentPlan.Waves {
 			component.CurrentWave = waveIndex + 1
 			component.CompletedInstances = append(component.CompletedInstances, wave...)
@@ -412,4 +410,25 @@ func removeString(values []string, target string) []string {
 		}
 	}
 	return result
+}
+
+// recordMigrations appends plan migrations that are not already recorded for a
+// component. ApplySimulation may be retried after a health-gate failure, and
+// migrations are recorded before the health check, so an earlier attempt may
+// already have recorded the same IDs. Skipping already-recorded IDs keeps
+// retries duplicate-free while preserving the order of the first application;
+// a fresh component still records the full plan order exactly once.
+func recordMigrations(recorded []string, plan []Migration) []string {
+	seen := make(map[string]bool, len(recorded))
+	for _, id := range recorded {
+		seen[id] = true
+	}
+	for _, migration := range plan {
+		if seen[migration.ID] {
+			continue
+		}
+		recorded = append(recorded, migration.ID)
+		seen[migration.ID] = true
+	}
+	return recorded
 }
